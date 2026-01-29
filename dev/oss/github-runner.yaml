@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github-runner
+  namespace: amul
+  labels:
+    app: github-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: github-runner
+  template:
+    metadata:
+      labels:
+        app: github-runner
+    spec:
+      containers:
+      - name: runner
+        image: myoung34/github-runner:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: "2"
+            memory: "8Gi"
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+        env:
+        - name: RUNNER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-runner-secrets
+              key: GITHUB_ACCESS_TOKEN
+        - name: REPO_URL
+          valueFrom:
+            secretKeyRef:
+              name: github-runner-secrets
+              key: REPO_URL
+        - name: RUNNER_WORKDIR
+          value: "/tmp/github-runner"
+        - name: DOCKER_HOST
+          value: tcp://localhost:2375
+        volumeMounts:
+        - name: runner-work
+          mountPath: /tmp/github-runner
+      - name: dind
+        image: docker:dind
+        securityContext:
+          privileged: true
+        env:
+        - name: DOCKER_TLS_CERTDIR
+          value: ""
+        volumeMounts:
+        - name: runner-work
+          mountPath: /tmp/github-runner
+      volumes:
+      - name: runner-work
+        emptyDir: {}

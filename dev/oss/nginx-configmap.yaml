@@ -1,0 +1,256 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-gateway-config
+  namespace: amul
+data:
+  default.conf: |
+    # Logs to stdout/stderr for Promtail to pick up
+    error_log  /dev/stderr warn;
+
+    # Define JSON log format for Loki analytics
+    log_format json_analytics escape=json '{'
+        '"time_local":"$time_local",'
+        '"remote_addr":"$remote_addr",'
+        '"remote_user":"$remote_user",'
+        '"request":"$request",'
+        '"status": "$status",'
+        '"body_bytes_sent":"$body_bytes_sent",'
+        '"request_time":"$request_time",'
+        '"http_referrer":"$http_referer",'
+        '"http_user_agent":"$http_user_agent",'
+        '"upstream_response_time":"$upstream_response_time",'
+        '"upstream_addr":"$upstream_addr",'
+        '"http_x_forwarded_for":"$http_x_forwarded_for"'
+    '}';
+
+    ############################################
+    # MODEL-COMPARISON.DEV.AMULAI.IN - HTTP → HTTPS
+    ############################################
+    server {
+        listen 80;
+        server_name model-comparison.dev.amulai.in;
+
+        return 301 https://$host$request_uri;
+    }
+
+    ############################################
+    # MODEL-COMPARISON.DEV.AMULAI.IN - HTTPS
+    ############################################
+    server {
+        listen 443 ssl;
+        server_name model-comparison.dev.amulai.in;
+
+        # SSL certificates - using existing wildcard cert
+        ssl_certificate     /etc/ssl/.amul.com/tls.crt;
+        ssl_certificate_key /etc/ssl/.amul.com/tls.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        # Use the JSON log format
+        access_log /dev/stdout json_analytics;
+
+        client_max_body_size 50M;
+
+        ########################################
+        # LOGGER API
+        # Targets localhost:4002 (Docker Compose logger service external port)
+        # Preserves /api/ prefix in the request path
+        ########################################
+        location /api/ {
+            proxy_pass http://127.0.0.1:4002/api/;
+            proxy_http_version 1.1;
+
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        ########################################
+        # FRONTEND APP
+        # Targets localhost:5175 (Docker Compose frontend service external port)
+        ########################################
+        location / {
+            proxy_pass http://127.0.0.1:5175;
+            proxy_http_version 1.1;
+
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # WebSocket support for Vite HMR
+            proxy_set_header Upgrade           $http_upgrade;
+            proxy_set_header Connection        "upgrade";
+        }
+    }
+
+    ############################################
+    # HTTP → HTTPS (Certbot managed)
+    ############################################
+    server {
+        listen 80;
+        server_name dev-amulmitra.amul.com;
+
+        return 301 https://$host$request_uri;
+    }
+
+    ############################################
+    # HTTPS MAIN SERVER
+    ############################################
+    server {
+        listen 443 ssl;
+        large_client_header_buffers 4 32k;
+        server_name dev-amulmitra.amul.com;
+
+        # Certificates mounted via Secret
+        ssl_certificate     /etc/ssl/.amul.com/tls.crt;
+        ssl_certificate_key /etc/ssl/.amul.com/tls.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        # Use the JSON log format
+        access_log /dev/stdout json_analytics;
+
+        client_max_body_size 50M;
+
+        # DNS resolver for Kubernetes services
+        resolver 10.96.0.10 valid=30s;
+
+        ########################################
+        # ROOT APP (/)
+        # Targets Localhost:8001 (Host-bound service)
+        ########################################
+        location / {
+            proxy_pass http://127.0.0.1:8001;
+            proxy_http_version 1.1;
+
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        ########################################
+        # OBSERVABILITY SERVICE
+        # Targets Grafana Service
+        ########################################
+        location /grafana/ {
+            proxy_pass http://10.5.25.36:8000;
+            proxy_http_version 1.1;
+
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        ########################################
+        # ARGOCD
+        ########################################
+        location /argocd/ {
+            set $argocd_upstream http://argocd-server.argocd.svc.cluster.local:80;
+            proxy_pass $argocd_upstream;
+            proxy_http_version 1.1;
+
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        ########################################
+        # DOCKER REGISTRY
+        ########################################
+        location /v2/ {
+            # Do not allow requests from older docker clients
+            if ($http_user_agent ~* "^(docker\/1\.(3|4|5(?!\.[0-9]-dev))|Go ).*$" ) {
+                return 404;
+            }
+
+            set $registry_upstream http://docker-registry.amul.svc.cluster.local:5000;
+            proxy_pass $registry_upstream;
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout                 900;
+            client_max_body_size               0; # Allow unlimited size for docker push
+        }
+
+        ########################################
+        # TELEMETRY SERVICE
+        # Targets Localhost:8181 (Host-bound)
+        ########################################
+        location /observability-service/ {
+            proxy_pass http://127.0.0.1:8181;
+            proxy_http_version 1.1;
+
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        ########################################
+        # API SERVICE
+        # Targets Worker 2
+        ########################################
+        location /api/ {
+            # CORS unchanged
+            set $cors_origin "";
+            if ($http_origin ~* ^https?://(proddashboardvistaar\.mahapocra\.gov\.in|prodaskvistaar\.mahapocra\.gov\.in)$) {
+                set $cors_origin $http_origin;
+            }
+            add_header 'Access-Control-Allow-Origin'      "$cors_origin" always;
+            add_header 'Access-Control-Allow-Credentials' 'true' always;
+            add_header 'Access-Control-Allow-Methods'     'GET, POST, PUT, DELETE, OPTIONS' always;
+            add_header 'Access-Control-Allow-Headers'     'Origin, Content-Type, Accept, Authorization' always;
+
+            if ($request_method = OPTIONS) {
+                add_header 'Access-Control-Max-Age' 1728000;
+                add_header 'Content-Type' 'text/plain; charset=UTF-8';
+                add_header 'Content-Length' 0;
+                return 204;
+            }
+
+            proxy_pass http://10.5.25.36:8000;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        ########################################
+        # VOICE SERVICE
+        # Targets 10.5.25.36:8003
+        ########################################
+        location /voice/ {
+            proxy_pass http://10.5.25.36:8003/;
+            proxy_http_version 1.1;
+            proxy_buffering off;
+
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+
+    ############################################
+    # METRICS SERVER (Internal)
+    ############################################
+    server {
+        listen 8080;
+        server_name localhost;
+
+        location /stub_status {
+            stub_status;
+            allow 127.0.0.1;
+            deny all;
+        }
+    }
