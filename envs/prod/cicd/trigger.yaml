@@ -4,7 +4,7 @@ metadata:
   name: amul-oan-api-prod-ci
   namespace: argocd
 spec:
-  schedule: "*/15 * * * *"
+  schedule: "*/10 * * * * *"
   timezone: "Asia/Kolkata"
   concurrencyPolicy: "Forbid"
   workflowSpec:
