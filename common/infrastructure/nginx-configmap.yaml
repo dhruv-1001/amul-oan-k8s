@@ -24,14 +24,35 @@ data:
         '"http_x_forwarded_for":"$http_x_forwarded_for"'
     '}';
 
+    # Log format matching the exporter configuration
+    # Log format matching the exporter configuration
+    log_format prometheus '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$http_x_forwarded_for"';
+    
+    # Conditional logging map
+    map $request_uri $loggable {
+        default 0;
+        ~^/(api|chat|voice) 1;
+    }
+
+    # Write to shared volume for the sidecar exporter (Filtered)
+    access_log /var/log/nginx/access.log prometheus if=$loggable;
+    
     ############################################
-    # MODEL-COMPARISON.DEV.AMULAI.IN - HTTP → HTTPS
+    # MODEL-COMPARISON.DEV.AMULAI.IN - HTTP (ACME + redirect)
     ############################################
     server {
         listen 80;
         server_name model-comparison.dev.amulai.in;
 
-        return 301 https://$host$request_uri;
+        # Let's Encrypt HTTP-01 challenge
+        location /.well-known/acme-challenge/ {
+            alias /var/www/acme-challenge/.well-known/acme-challenge/;
+            allow all;
+        }
+
+        location / {
+            return 301 https://$host$request_uri;
+        }
     }
 
     ############################################
@@ -41,14 +62,15 @@ data:
         listen 443 ssl;
         server_name model-comparison.dev.amulai.in;
 
-        # SSL certificates - using existing wildcard cert
-        ssl_certificate     /etc/ssl/.amul.com/tls.crt;
-        ssl_certificate_key /etc/ssl/.amul.com/tls.key;
+        # SSL certificates - using Let's Encrypt *.dev.amulai.in cert
+        ssl_certificate     /etc/ssl/.dev.amulai.in/tls.crt;
+        ssl_certificate_key /etc/ssl/.dev.amulai.in/tls.key;
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers HIGH:!aNULL:!MD5;
 
-        # Use the JSON log format
-        access_log /dev/stdout json_analytics;
+        # Use the JSON log format (Filtered)
+        access_log /dev/stdout json_analytics if=$loggable;
+        access_log /var/log/nginx/telemetry.log prometheus if=$loggable;
 
         client_max_body_size 50M;
 
@@ -87,6 +109,105 @@ data:
     }
 
     ############################################
+    # LANGFUSE.DEV.AMULAI.IN - HTTP (ACME + redirect)
+    ############################################
+    server {
+        listen 80;
+        server_name langfuse.dev.amulai.in;
+
+        # Let's Encrypt HTTP-01 challenge
+        location /.well-known/acme-challenge/ {
+            alias /var/www/acme-challenge/.well-known/acme-challenge/;
+            allow all;
+        }
+
+        location / {
+            return 301 https://$host$request_uri;
+        }
+    }
+
+    ############################################
+    # LANGFUSE.DEV.AMULAI.IN - HTTPS
+    ############################################
+    server {
+        listen 443 ssl;
+        server_name langfuse.dev.amulai.in;
+
+        # SSL certificates - using Let's Encrypt *.dev.amulai.in cert
+        ssl_certificate     /etc/ssl/.dev.amulai.in/tls.crt;
+        ssl_certificate_key /etc/ssl/.dev.amulai.in/tls.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        access_log /dev/stdout json_analytics if=$loggable;
+        access_log /var/log/nginx/telemetry.log prometheus if=$loggable;
+
+        client_max_body_size 50M;
+
+        location / {
+            proxy_pass http://10.5.25.44:3001;
+            proxy_http_version 1.1;
+
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # WebSocket support (Langfuse UI)
+            proxy_set_header Upgrade           $http_upgrade;
+            proxy_set_header Connection        "upgrade";
+        }
+    }
+
+    ############################################
+    # VOICE-CHAT-UI.DEV.AMULAI.IN - HTTP (ACME + redirect)
+    ############################################
+    server {
+        listen 80;
+        server_name voice-chat-ui.dev.amulai.in;
+
+        # Let's Encrypt HTTP-01 challenge
+        location /.well-known/acme-challenge/ {
+            alias /var/www/acme-challenge/.well-known/acme-challenge/;
+            allow all;
+        }
+
+        location / {
+            return 301 https://$host$request_uri;
+        }
+    }
+
+    ############################################
+    # VOICE-CHAT-UI.DEV.AMULAI.IN - HTTPS
+    ############################################
+    server {
+        listen 443 ssl;
+        server_name voice-chat-ui.dev.amulai.in;
+
+        # SSL certificates - using Let's Encrypt *.dev.amulai.in cert
+        ssl_certificate     /etc/ssl/.dev.amulai.in/tls.crt;
+        ssl_certificate_key /etc/ssl/.dev.amulai.in/tls.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        access_log /dev/stdout json_analytics if=$loggable;
+        access_log /var/log/nginx/telemetry.log prometheus if=$loggable;
+
+        client_max_body_size 50M;
+
+        # Voice UI (OAN-UI-voice) - host port 8002
+        location / {
+            proxy_pass http://127.0.0.1:8002;
+            proxy_http_version 1.1;
+
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+
+    ############################################
     # HTTP → HTTPS (Certbot managed)
     ############################################
     server {
@@ -110,8 +231,8 @@ data:
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_ciphers HIGH:!aNULL:!MD5;
 
-        # Use the JSON log format
-        access_log /dev/stdout json_analytics;
+        # Use the JSON log format (Filtered)
+        access_log /dev/stdout json_analytics if=$loggable;
 
         client_max_body_size 50M;
 
@@ -137,7 +258,7 @@ data:
         # Targets Grafana Service
         ########################################
         location /grafana/ {
-            proxy_pass http://10.5.25.36:8000;
+            proxy_pass http://10.5.25.36:31300;
             proxy_http_version 1.1;
 
             proxy_set_header Host              $host;

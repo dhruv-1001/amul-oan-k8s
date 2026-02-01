@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: amul-oan-api-config
+  namespace: amul
+data:
+  ENV_ONE: "VALUE_1"
+  ENV_TWO: "VALUE_2"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: amul-oan-api
+  namespace: amul
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: amul-oan-api
+  template:
+    metadata:
+      labels:
+        app: amul-oan-api
+    spec:
+      nodeSelector:
+        role: backend
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - name: amul-oan-api
+        image: dev-amulmitra.amul.com/amul-oan-api:dev-v0.0.1
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: amul-oan-api-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: amul-oan-api
+  namespace: amul
+spec:
+  selector:
+    app: amul-oan-api
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000

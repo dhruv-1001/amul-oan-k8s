@@ -43,6 +43,12 @@ spec:
               readOnly: true
             - name: shared-logs
               mountPath: /var/log/nginx
+            - name: acme-challenge
+              mountPath: /var/www/acme-challenge
+              readOnly: false
+            - name: tls-dev-amulai-in-certs
+              mountPath: /etc/ssl/.dev.amulai.in/
+              readOnly: true
           resources:
             requests:
               cpu: 100m
@@ -102,3 +108,10 @@ spec:
         - name: tls-certs
           secret:
             secretName: tls-app-certs
+        - name: acme-challenge
+          hostPath:
+            path: /var/www/acme-challenge
+            type: DirectoryOrCreate
+        - name: tls-dev-amulai-in-certs
+          secret:
+            secretName: tls-dev-amulai-in-certs

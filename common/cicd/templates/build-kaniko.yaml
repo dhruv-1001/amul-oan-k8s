@@ -1,0 +1,159 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: build-with-kaniko
+  namespace: argo
+spec:
+  serviceAccountName: ci-builder
+  entrypoint: build-and-push
+  arguments:
+    parameters:
+      - name: repo_url
+      - name: branch
+      - name: image_name # e.g., amul-oan-api
+      - name: registry_url # e.g., dev-amulmitra.amul.com (internal registry URL)
+      - name: tag_strategy # "branch" (commit-sha) or "tag" (git-tag)
+  
+  templates:
+  - name: build-and-push
+    inputs:
+      parameters:
+        - name: repo_url
+        - name: branch
+        - name: image_name
+        - name: registry_url
+        - name: tag_strategy
+    
+    steps:
+    - - name: get-git-info
+        template: git-checkout-check
+        arguments:
+          parameters:
+            - name: repo_url
+              value: "{{inputs.parameters.repo_url}}"
+            - name: branch
+              value: "{{inputs.parameters.branch}}"
+            - name: tag_strategy
+              value: "{{inputs.parameters.tag_strategy}}"
+            - name: registry_url
+              value: "{{inputs.parameters.registry_url}}"
+            - name: image_name
+              value: "{{inputs.parameters.image_name}}"
+    
+    - - name: build
+        template: kaniko-build
+        when: "{{steps.get-git-info.outputs.parameters.should_build}} == true"
+        arguments:
+          parameters:
+            - name: repo_url
+              value: "{{inputs.parameters.repo_url}}"
+            - name: commit_hash
+              value: "{{steps.get-git-info.outputs.parameters.commit_hash}}"
+            - name: image_tag
+              value: "{{steps.get-git-info.outputs.parameters.image_tag}}"
+            - name: image_name
+              value: "{{inputs.parameters.image_name}}"
+            - name: registry_url
+              value: "{{inputs.parameters.registry_url}}"
+
+  - name: git-checkout-check
+    inputs:
+      parameters:
+        - name: repo_url
+        - name: branch
+        - name: tag_strategy
+        - name: image_name
+        - name: registry_url
+    outputs:
+      parameters:
+        - name: should_build
+          valueFrom:
+            path: /tmp/should_build
+        - name: commit_hash
+          valueFrom:
+            path: /tmp/commit_hash
+        - name: image_tag
+          valueFrom:
+            path: /tmp/image_tag
+    container:
+      image: gcr.io/go-containerregistry/crane:debug
+      command: [sh]
+      args:
+        - -c
+      source: |
+        apk add --no-cache curl
+        
+        REPO="{{inputs.parameters.repo_url}}"
+        BRANCH="{{inputs.parameters.branch}}"
+        STRATEGY="{{inputs.parameters.tag_strategy}}"
+        REGISTRY="{{inputs.parameters.registry_url}}"
+        IMAGE="{{inputs.parameters.image_name}}"
+        
+        echo "Starting check for $REPO ($STRATEGY)..."
+
+        # 1. Determine the Tag we EXPECT
+        if [ "$STRATEGY" = "tag" ]; then
+          LATEST_TAG=$(git ls-remote --tags --sort=-v:refname "$REPO" | head -n 1 | awk -F/ '{print $3}' | awk '{print $1}')
+          if [ -z "$LATEST_TAG" ]; then echo "No tags found"; exit 0; fi
+          
+          IMAGE_TAG="$LATEST_TAG"
+          COMMIT_HASH="$LATEST_TAG"
+        else
+          # Branch Strategy
+          LATEST_SHA=$(git ls-remote "$REPO" "refs/heads/$BRANCH" | awk '{print $1}' | cut -c1-7)
+          if [ -z "$LATEST_SHA" ]; then echo "Branch not found"; exit 1; fi
+          
+          IMAGE_TAG="$BRANCH-$LATEST_SHA"
+          COMMIT_HASH="$LATEST_SHA"
+        fi
+
+        echo "Identified Hash/Tag: $COMMIT_HASH"
+        echo "$COMMIT_HASH" > /tmp/commit_hash
+        echo "$IMAGE_TAG" > /tmp/image_tag
+
+        # 2. Check if this image ALREADY EXISTS in Registry
+        # Assuming internal registry allows checking manifests or we try to check via HTTP.
+        # Format: http://registry/v2/<name>/manifests/<tag>
+        # Note: If registry uses HTTPS/Auth, this curl needs credentials.
+        # Since we are in the same cluster/network, and often internal registries are open for reading or we need to mount secrets.
+        # For this template, to be SAFE and ensure we don't skip required builds, 
+        # we will default to TRUE *unless* we receive a clear 200 OK from the registry indicating "Yes, I have it".
+        
+        CHECK_URL="http://$REGISTRY/v2/$IMAGE/manifests/$IMAGE_TAG"
+        echo "Checking registry: $CHECK_URL"
+        
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$CHECK_URL" || echo "000")
+        
+        if [ "$HTTP_CODE" = "200" ]; then
+           echo "Image $IMAGE:$IMAGE_TAG already exists (HTTP 200). Skipping build."
+           echo "false" > /tmp/should_build
+        else
+           echo "Image not found ($HTTP_CODE). Triggering build."
+           echo "true" > /tmp/should_build
+        fi
+
+  - name: kaniko-build
+    inputs:
+      parameters:
+        - name: repo_url
+        - name: commit_hash
+        - name: image_tag
+        - name: image_name
+        - name: registry_url
+    container:
+      image: gcr.io/kaniko-project/executor:latest
+      args:
+        - "--context={{inputs.parameters.repo_url}}#{{inputs.parameters.commit_hash}}"
+        - "--destination={{inputs.parameters.registry_url}}/{{inputs.parameters.image_name}}:{{inputs.parameters.image_tag}}"
+        - "--cache=true"
+      volumeMounts:
+        - name: kaniko-secret
+          mountPath: /kaniko/.docker/
+  
+  volumes:
+    - name: kaniko-secret
+      secret:
+        secretName: regcred
+        items:
+          - key: .dockerconfigjson
+            path: config.json

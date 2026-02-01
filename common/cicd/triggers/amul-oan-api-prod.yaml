@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: amul-oan-api-prod-ci
+  namespace: argo
+spec:
+  schedule: "*/15 * * * *"
+  timezone: "Asia/Kolkata"
+  concurrencyPolicy: "Forbid"
+  workflowSpec:
+    serviceAccountName: ci-builder
+    workflowTemplateRef:
+      name: build-with-kaniko
+    arguments:
+      parameters:
+        - name: repo_url
+          value: "https://github.com/amulmitra/amul-oan-api.git"
+        - name: branch
+          value: "main" # Not used for 'tag' strategy but required by template param
+        - name: image_name
+          value: "amul-oan-api"
+        - name: registry_url
+          value: "dev-amulmitra.amul.com:5000"
+        - name: tag_strategy
+          value: "tag"

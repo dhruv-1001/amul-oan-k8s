@@ -6,7 +6,6 @@ metadata:
 data:
   ENV_ONE: "VALUE_1"
   ENV_TWO: "VALUE_2"
-  ENV_THREE: "VALUE_3"
 
 ---
 apiVersion: apps/v1
