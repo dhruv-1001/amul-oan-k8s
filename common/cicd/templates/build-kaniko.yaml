@@ -25,6 +25,7 @@ spec:
         - name: tag_strategy
         - name: target_namespace
         - name: target_deployment
+
     
     steps:
     - - name: get-git-info
@@ -41,6 +42,11 @@ spec:
               value: "{{inputs.parameters.registry_url}}"
             - name: image_name
               value: "{{inputs.parameters.image_name}}"
+            - name: target_namespace
+              value: "{{inputs.parameters.target_namespace}}"
+            - name: target_deployment
+              value: "{{inputs.parameters.target_deployment}}"
+
     
     - - name: build
         template: kaniko-build
@@ -60,7 +66,7 @@ spec:
               
     - - name: deploy
         template: kubectl-deploy
-        when: "{{inputs.parameters.target_deployment}} != ''"
+        when: "{{steps.get-git-info.outputs.parameters.should_deploy}} == true"
         arguments:
           parameters:
             - name: namespace
@@ -92,6 +98,9 @@ spec:
         - name: tag_strategy
         - name: image_name
         - name: registry_url
+        - name: target_namespace
+        - name: target_deployment
+
     outputs:
       parameters:
         - name: should_build
@@ -103,14 +112,16 @@ spec:
         - name: image_tag
           valueFrom:
             path: /tmp/image_tag
-    container:
-      image: gcr.io/go-containerregistry/crane:debug
+        - name: should_deploy
+          valueFrom:
+            path: /tmp/should_deploy
+    script:
+      image: dtzar/helm-kubectl:latest
       command: [sh]
-      args:
-        - -c
+      volumeMounts:
+        - name: kaniko-secret
+          mountPath: /kaniko/.docker/
       source: |
-        apk add --no-cache curl
-        
         REPO="{{inputs.parameters.repo_url}}"
         BRANCH="{{inputs.parameters.branch}}"
         STRATEGY="{{inputs.parameters.tag_strategy}}"
@@ -140,24 +151,61 @@ spec:
         echo "$IMAGE_TAG" > /tmp/image_tag
 
         # 2. Check if this image ALREADY EXISTS in Registry
-        # Assuming internal registry allows checking manifests or we try to check via HTTP.
-        # Format: http://registry/v2/<name>/manifests/<tag>
-        # Note: If registry uses HTTPS/Auth, this curl needs credentials.
-        # Since we are in the same cluster/network, and often internal registries are open for reading or we need to mount secrets.
-        # For this template, to be SAFE and ensure we don't skip required builds, 
-        # we will default to TRUE *unless* we receive a clear 200 OK from the registry indicating "Yes, I have it".
-        
         CHECK_URL="http://$REGISTRY/v2/$IMAGE/manifests/$IMAGE_TAG"
         echo "Checking registry: $CHECK_URL"
         
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$CHECK_URL" || echo "000")
+        AUTH_HEADER=""
+        
+        if [ -f /kaniko/.docker/config.json ]; then
+            AUTH_TOKEN=$(cat /kaniko/.docker/config.json | jq -r --arg reg "$REGISTRY" '.auths[$reg].auth // .auths["https://"+$reg].auth // empty')
+            if [ -n "$AUTH_TOKEN" ]; then
+                echo "Found credentials for $REGISTRY"
+                AUTH_HEADER="-H \"Authorization: Basic $AUTH_TOKEN\""
+            else
+                echo "No request-matching credentials found for $REGISTRY"
+            fi
+        fi
+        
+        # Use eval to handle the quoted header argument properly
+        # Send Accept headers to support OCI and Docker v2 manifests
+        # Use -L to follow HTTP->HTTPS redirects, -k to allow self-signed/internal certs
+        # Use --location-trusted to forward Authorization header to redirected host (HTTP->HTTPS)
+        HTTP_CODE=$(eval curl -L --location-trusted -k -s -o /dev/null -w "%{http_code}" $AUTH_HEADER -H \"Accept: application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json\" "$CHECK_URL" || echo "000")
         
         if [ "$HTTP_CODE" = "200" ]; then
            echo "Image $IMAGE:$IMAGE_TAG already exists (HTTP 200). Skipping build."
            echo "false" > /tmp/should_build
+           
+           # Check if we need to deploy (compare with running image)
+           TARGET_NS="{{inputs.parameters.target_namespace}}"
+           TARGET_DEPLOY="{{inputs.parameters.target_deployment}}"
+           EXT_REGISTRY="{{inputs.parameters.registry_url}}"
+           
+           if [ -n "$TARGET_DEPLOY" ]; then
+               echo "Checking current deployment image..."
+               CURRENT_IMAGE=$(kubectl get deployment -n "$TARGET_NS" "$TARGET_DEPLOY" -o jsonpath='{.spec.template.spec.containers[?(@.name=="'$IMAGE'")].image}')
+               EXPECTED_IMAGE="$EXT_REGISTRY/$IMAGE:$IMAGE_TAG"
+               
+               echo "Current Deployed Image: $CURRENT_IMAGE"
+               echo "Expected Image: $EXPECTED_IMAGE"
+               
+               if [ "$CURRENT_IMAGE" = "$EXPECTED_IMAGE" ]; then
+                   echo "Deployment is already up to date. Skipping deploy."
+                   echo "false" > /tmp/should_deploy
+               else
+                   echo "Deployment needs update. Proceeding with deploy."
+                   echo "true" > /tmp/should_deploy
+               fi
+           else
+               # No deployment target specified, so nothing to deploy
+               echo "false" > /tmp/should_deploy
+           fi
+           
         else
            echo "Image not found ($HTTP_CODE). Triggering build."
            echo "true" > /tmp/should_build
+           # If we build, we MUST deploy
+           echo "true" > /tmp/should_deploy
         fi
 
   - name: kaniko-build
@@ -168,10 +216,16 @@ spec:
         - name: image_tag
         - name: image_name
         - name: registry_url
+      artifacts:
+        - name: source
+          path: /src
+          git:
+            repo: "{{inputs.parameters.repo_url}}"
+            revision: "{{inputs.parameters.commit_hash}}"
     container:
       image: gcr.io/kaniko-project/executor:latest
       args:
-        - "--context={{inputs.parameters.repo_url}}#{{inputs.parameters.commit_hash}}"
+        - "--context=dir:///src"
         - "--destination={{inputs.parameters.registry_url}}/{{inputs.parameters.image_name}}:{{inputs.parameters.image_tag}}"
         - "--cache=true"
       volumeMounts:

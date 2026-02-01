@@ -4,7 +4,7 @@ metadata:
   name: amul-oan-api-dev-ci
   namespace: argocd
 spec:
-  schedule: "*/10 * * * * *"
+  schedule: "* * * * *"
   timezone: "Asia/Kolkata"
   concurrencyPolicy: "Forbid"
   workflowSpec:
@@ -20,7 +20,7 @@ spec:
         - name: image_name
           value: "amul-oan-api"
         - name: registry_url
-          value: "dev-amulmitra.amul.com:5000"
+          value: "dev-amulmitra.amul.com"
         - name: tag_strategy
           value: "branch"
         - name: target_namespace
