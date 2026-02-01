@@ -49,6 +49,9 @@ spec:
             - name: tls-dev-amulai-in-certs
               mountPath: /etc/ssl/.dev.amulai.in/
               readOnly: true
+            - name: tls-uat-amulai-in-certs
+              mountPath: /etc/ssl/.uat.amulai.in/
+              readOnly: true
           resources:
             requests:
               cpu: 100m
@@ -115,3 +118,6 @@ spec:
         - name: tls-dev-amulai-in-certs
           secret:
             secretName: tls-dev-amulai-in-certs
+        - name: tls-uat-amulai-in-certs
+          secret:
+            secretName: tls-uat-amulai-in-certs
