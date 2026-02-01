@@ -5,10 +5,9 @@ metadata:
   namespace: argo
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: ci-builder-role
-  namespace: argo
 rules:
   - apiGroups: [""]
     resources: ["secrets", "configmaps"]
@@ -16,15 +15,17 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "pods/log"]
     verbs: ["get", "list", "watch", "create", "delete", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   name: ci-builder-binding
-  namespace: argo
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: Role
+  kind: ClusterRole
   name: ci-builder-role
 subjects:
   - kind: ServiceAccount

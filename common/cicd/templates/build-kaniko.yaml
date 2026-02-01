@@ -23,6 +23,8 @@ spec:
         - name: image_name
         - name: registry_url
         - name: tag_strategy
+        - name: target_namespace
+        - name: target_deployment
     
     steps:
     - - name: get-git-info
@@ -55,6 +57,32 @@ spec:
               value: "{{inputs.parameters.image_name}}"
             - name: registry_url
               value: "{{inputs.parameters.registry_url}}"
+              
+    - - name: deploy
+        template: kubectl-deploy
+        when: "{{inputs.parameters.target_deployment}} != ''"
+        arguments:
+          parameters:
+            - name: namespace
+              value: "{{inputs.parameters.target_namespace}}"
+            - name: deployment
+              value: "{{inputs.parameters.target_deployment}}"
+            - name: container
+              value: "{{inputs.parameters.image_name}}" # Assuming container name matches image name usually, or we add another param
+            - name: image
+              value: "{{inputs.parameters.registry_url}}/{{inputs.parameters.image_name}}:{{steps.get-git-info.outputs.parameters.image_tag}}"
+
+  - name: kubectl-deploy
+    inputs:
+      parameters:
+        - name: namespace
+        - name: deployment
+        - name: container
+        - name: image
+    container:
+      image: bitnami/kubectl:latest
+      command: [sh, -c]
+      args: ["kubectl set image deployment/{{inputs.parameters.deployment}} {{inputs.parameters.container}}={{inputs.parameters.image}} -n {{inputs.parameters.namespace}}"]
 
   - name: git-checkout-check
     inputs:

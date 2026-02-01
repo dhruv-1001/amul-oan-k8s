@@ -23,3 +23,7 @@ spec:
           value: "dev-amulmitra.amul.com:5000"
         - name: tag_strategy
           value: "branch"
+        - name: target_namespace
+          value: "amul"
+        - name: target_deployment
+          value: "amul-oan-api"
