@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: build-with-kaniko
-  namespace: argo
+  namespace: argocd
 spec:
   serviceAccountName: ci-builder
   entrypoint: build-and-push

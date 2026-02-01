@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:
   name: amul-oan-api-uat-ci
-  namespace: argo
+  namespace: argocd
 spec:
   schedule: "*/5 * * * *"
   timezone: "Asia/Kolkata"
