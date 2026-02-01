@@ -1,18 +1,8 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: amul-oan-api-config
-  namespace: amul-uat
-data:
-  ENV_ONE: "VALUE_1"
-  ENV_TWO: "VALUE_2"
-
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: amul-oan-api
-  namespace: amul-uat
+  namespace: amul
 spec:
   replicas: 1
   selector:
@@ -29,19 +19,20 @@ spec:
       - name: regcred
       containers:
       - name: amul-oan-api
-        image: dev-amulmitra.amul.com/amul-oan-api:dev-v0.0.1
+        # In Prod, we might ideally want a specific tag, but following the 'ignore version' instruction:
+        image: dev-amulmitra.amul.com/amul-oan-api:latest
         ports:
         - containerPort: 8000
         envFrom:
-        - configMapRef:
-            name: amul-oan-api-config
+        - secretRef:
+            name: amul-oan-api-prod-secrets
 
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: amul-oan-api
-  namespace: amul-uat
+  namespace: amul
 spec:
   selector:
     app: amul-oan-api

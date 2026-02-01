@@ -1,13 +1,3 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: amul-oan-api-config
-  namespace: amul
-data:
-  ENV_ONE: "VALUE_1"
-  ENV_TWO: "VALUE_2"
-
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,12 +19,12 @@ spec:
       - name: regcred
       containers:
       - name: amul-oan-api
-        image: dev-amulmitra.amul.com/amul-oan-api:dev-v0.0.1
+        image: dev-amulmitra.amul.com/amul-oan-api:latest
         ports:
         - containerPort: 8000
         envFrom:
-        - configMapRef:
-            name: amul-oan-api-config
+        - secretRef:
+            name: amul-oan-api-dev-secrets
 
 ---
 apiVersion: v1
