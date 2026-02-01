@@ -14,7 +14,7 @@ spec:
     arguments:
       parameters:
         - name: repo_url
-          value: "https://github.com/amulmitra/amul-oan-api.git"
+          value: "https://github.com/dhruv-1001/amul-oan-api.git"
         - name: branch
           value: "main" # Not used for 'tag' strategy but required by template param
         - name: image_name
