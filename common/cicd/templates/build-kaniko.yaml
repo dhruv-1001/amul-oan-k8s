@@ -132,7 +132,13 @@ spec:
 
         # 1. Determine the Tag we EXPECT
         if [ "$STRATEGY" = "tag" ]; then
-          LATEST_TAG=$(git ls-remote --tags --sort=-v:refname "$REPO" | head -n 1 | awk -F/ '{print $3}' | awk '{print $1}')
+          # Robust tag extraction:
+          # 1. Sort by version (descending)
+          # 2. Filter out dereferenced tags (^{})
+          # 3. Take the first result
+          # 4. Extract ref name ($2)
+          # 5. Strip 'refs/tags/' prefix
+          LATEST_TAG=$(git ls-remote --tags --sort=-v:refname "$REPO" | grep -v '\^{}' | head -n 1 | awk '{print $2}' | sed 's|^refs/tags/||')
           if [ -z "$LATEST_TAG" ]; then echo "No tags found"; exit 0; fi
           
           IMAGE_TAG="$LATEST_TAG"
