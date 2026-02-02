@@ -45,7 +45,7 @@ spec:
         app: docker-registry
     spec:
       nodeSelector:
-        kubernetes.io/hostname: uat-vm3-uintele
+        role: infrastructure
       tolerations:
       - key: node-role.kubernetes.io/control-plane
         effect: NoSchedule

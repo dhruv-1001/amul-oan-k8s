@@ -199,7 +199,7 @@ spec:
     spec:
       serviceAccountName: prometheus
       nodeSelector:
-        kubernetes.io/hostname: uat-vm3-uintele
+        role: infrastructure
       securityContext:
         fsGroup: 65534
       initContainers:

@@ -15,11 +15,11 @@ spec:
       labels:
         app: nginx-gateway
       annotations:
-        prometheus.io/scrape: 'true'
+        role: infrastructure'
         prometheus.io/port:   '9113'
     spec:
       nodeSelector:
-        kubernetes.io/hostname: uat-vm3-uintele
+        role: infrastructure
       hostNetwork: true
       tolerations:
       - key: node-role.kubernetes.io/control-plane
