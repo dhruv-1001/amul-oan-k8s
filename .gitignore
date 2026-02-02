@@ -1,0 +1,13 @@
+# Secrets and credentials – never commit
+.env
+.env.*
+!.env.example
+*.secrets
+cloudflare-key
+
+# External DBs – local env
+external-dbs/.env
+
+# Env files with real values (reference only)
+amul_env
+voice-env

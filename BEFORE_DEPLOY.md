@@ -34,11 +34,9 @@ Complete these items before applying the K8s manifests.
 
 ---
 
-## 3. Secrets repo
+## 3. Secrets (create on server)
 
-- [ ] **amul-secrets-repo** – Ensure the secrets-sync CronWorkflow can clone it (git credentials in `argocd` namespace: `git-credentials` secret with `username` + `token`).
-
-- [ ] **Secrets in `prod/`** – Add to your secrets repo (see `envs/prod/services/SECRETS.md` for YAML):
+- [ ] **Create secrets on the server** – SSH to the cluster admin node and run `kubectl create secret` or apply from local YAML files. See `envs/prod/services/SECRETS.md` for the list and `envs/prod/scripts/create-secrets.sh` for helper commands.
 
   | Secret                         | Namespace | Used by                                   |
   |--------------------------------|-----------|-------------------------------------------|
@@ -46,9 +44,9 @@ Complete these items before applying the K8s manifests.
   | voice-oan-api-prod-secrets     | amul-prod | voice-oan-api                             |
   | langfuse-secrets               | amul-prod | Langfuse                                  |
 
-  DB credentials (Postgres, ClickHouse, MinIO) are in `external-dbs/.env`, not K8s secrets.
+  DB credentials (Postgres, ClickHouse, MinIO) live in `external-dbs/.env` on the DB host, not in K8s.
 
-- [ ] **regcred** – Create image-pull secret in `amul-prod` (and any namespace that pulls from your registry):
+- [ ] **regcred** – Create image-pull secret in `amul-prod`:
   ```bash
   kubectl create secret docker-registry regcred \
     --docker-server=dev-amulmitra.amul.com \
@@ -85,7 +83,6 @@ Complete these items before applying the K8s manifests.
 
 - [ ] **ci-builder** – ServiceAccount with permissions to build (Kaniko) and run `kubectl set image`.
 
-- [ ] **Git credentials** – `git-credentials` secret in `argocd` for secrets-sync (and any private repo clones).
 
 ---
 
@@ -115,7 +112,7 @@ Complete these items before applying the K8s manifests.
 
 1. External DBs (docker compose up in external-dbs/)  
 2. Namespaces  
-3. Secrets (via secrets-sync or manual apply)  
+3. Secrets (create on server via kubectl)  
 4. Langfuse (web + worker)  
 5. amul-oan-api, voice-oan-api  
 6. OAN-UI chat, OAN-UI voice (or let CI build and deploy)  

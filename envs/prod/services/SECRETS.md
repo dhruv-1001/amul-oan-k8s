@@ -1,8 +1,8 @@
-# Secrets required for Langfuse and shared infrastructure
+# Secrets – configure on the server
 
-Create these secrets in your secrets repo (`amul-secrets-repo`) under `prod/` and sync via the secrets-sync CronWorkflow. The `namespace` in each file determines where the secret is applied.
+Create these secrets directly on the cluster. Use `envs/prod/scripts/create-secrets.sh` (run on server with kubectl access) or create manually via `kubectl create secret`. Do **not** commit real values to git.
 
-**Note:** Postgres, Redis, ClickHouse, MinIO run externally via `external-dbs/docker-compose.yml`. No K8s secrets needed for DB credentials in `amul` namespace; credentials live in the external-dbs `.env`.
+**Note:** Postgres, Redis, ClickHouse, MinIO run externally. DB credentials live in `external-dbs/.env`; the script uses `CLICKHOUSE_PASSWORD` and `MINIO_ROOT_PASSWORD` from your env (same values as external-dbs).
 
 ## amul-prod namespace
 
