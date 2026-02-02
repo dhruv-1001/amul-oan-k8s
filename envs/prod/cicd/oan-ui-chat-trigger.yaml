@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:
-  name: amul-oan-api-dev-ci
+  name: oan-ui-chat-prod-ci
   namespace: argocd
 spec:
   schedule: "* * * * *"
@@ -10,20 +10,20 @@ spec:
   workflowSpec:
     serviceAccountName: ci-builder
     workflowTemplateRef:
-      name: build-with-kaniko
+      name: build-oan-ui
     arguments:
       parameters:
-        - name: repo_url
-          value: "https://github.com/dhruv-1001/amul-oan-api.git"
         - name: branch
-          value: "dev"
+          value: "amul-prod"
         - name: image_name
-          value: "amul-oan-api"
+          value: "oan-ui-chat"
         - name: registry_url
           value: "dev-amulmitra.amul.com"
-        - name: tag_strategy
-          value: "branch"
+        - name: vite_api_base_url
+          value: "https://api.prod.amulai.in"
+        - name: vite_voice_oan_mode
+          value: ""
         - name: target_namespace
-          value: "amul-dev"
+          value: "amul-prod"
         - name: target_deployment
-          value: "amul-oan-api"
+          value: "oan-ui-chat"

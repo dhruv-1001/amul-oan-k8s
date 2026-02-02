@@ -6,9 +6,4 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: amul-dev
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: amul-uat
+  name: amul-prod

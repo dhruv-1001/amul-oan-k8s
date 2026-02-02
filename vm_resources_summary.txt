@@ -1,0 +1,42 @@
+==========================================
+VM RESOURCE SUMMARY
+==========================================
+
+REACHABLE VMs:
+--------------
+✅ amul-prod-vm2-db
+   CPU: 8 cores (AMD EPYC 7763)
+   Memory: 31Gi total, 840Mi used, 30Gi available
+   Disk: 495G total, 2.3G used (1%), 493G available
+   Load: 0.00, 0.01, 0.00
+
+✅ amul-prod-vm3-uintele (Jump Host)
+   CPU: 4 cores (AMD EPYC 7763)
+   Memory: 15Gi total, 2.0Gi used, 13Gi available
+   Disk: 123G total, 8.8G used (8%), 115G available
+   Load: 0.13, 0.12, 0.09
+
+✅ amul-prod-vm5-ai-backend
+   CPU: 4 cores (AMD EPYC 7763)
+   Memory: 15Gi total, 2.1Gi used, 13Gi available
+   Disk: 247G total, 8.6G used (4%), 239G available
+   Load: 12.54, 11.62, 11.52 (⚠️ HIGH LOAD)
+
+✅ amul-prod-vm6-ai-vecdb
+   CPU: 8 cores (AMD EPYC 7763)
+   Memory: 31Gi total, 6.5Gi used, 24Gi available
+   Disk: 495G total, 31G used (7%), 465G available
+   Load: 0.31, 0.17, 0.11
+
+NOT REACHABLE:
+--------------
+❌ amul-prod-vm4-dashboard
+   Reason: Connection timed out during banner exchange
+
+==========================================
+NOTES:
+- All VMs use AMD EPYC 7763 processors
+- None have swap configured
+- amul-prod-vm5-ai-backend shows high CPU load
+- amul-prod-vm4-dashboard appears to be down or unreachable
+==========================================

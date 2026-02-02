@@ -1,0 +1,48 @@
+# CronJob to renew *.prod.amulai.in certs (runs daily at 3am).
+# Uses same volume as certbot Job and nginx-gateway-prod.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: certbot-renew-prod-amulai
+  namespace: amul
+spec:
+  schedule: "0 3 * * *"   # 3am UTC (adjust for Asia/Kolkata if needed: "30 21 * * *" = 3am IST)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          nodeSelector:
+            role: infrastructure
+          restartPolicy: OnFailure
+          containers:
+            - name: certbot
+              image: certbot/certbot:v2.9.0
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  pip install -q certbot-dns-cloudflare
+                  certbot renew \
+                    --config-dir /etc/letsencrypt \
+                    --work-dir /var/lib/letsencrypt \
+                    --logs-dir /var/log/letsencrypt
+                  # Reload nginx to pick up renewed certs (nginx in same pod network)
+                  # nginx handles cert reload on request via ssl_reload or we rely on next config reload
+              volumeMounts:
+                - name: letsencrypt
+                  mountPath: /etc/letsencrypt
+                - name: cloudflare-credentials
+                  mountPath: /etc/cloudflare
+                  readOnly: true
+          volumes:
+            - name: letsencrypt
+              hostPath:
+                path: /data/letsencrypt-prod-amulai
+                type: DirectoryOrCreate
+            - name: cloudflare-credentials
+              secret:
+                secretName: certbot-cloudflare-credentials

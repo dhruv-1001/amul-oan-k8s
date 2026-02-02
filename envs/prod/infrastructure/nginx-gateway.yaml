@@ -38,8 +38,8 @@ spec:
             - name: nginx-conf
               mountPath: /etc/nginx/conf.d/default.conf
               subPath: default.conf
-            - name: tls-prod-certs
-              mountPath: /etc/ssl/.prod.amulai.in/
+            - name: letsencrypt-certs
+              mountPath: /etc/letsencrypt
               readOnly: true
             - name: shared-logs
               mountPath: /var/log/nginx
@@ -99,6 +99,7 @@ spec:
         - name: log-exporter-conf
           configMap:
             name: nginx-exporter-config
-        - name: tls-prod-certs
-          secret:
-            secretName: tls-prod-amulai-in-certs
+        - name: letsencrypt-certs
+          hostPath:
+            path: /data/letsencrypt-prod-amulai
+            type: DirectoryOrCreate

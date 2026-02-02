@@ -1,0 +1,47 @@
+# OAN-UI Voice - frontend for voice-oan-api
+# Built from OpenAgriNet/OAN-UI amul-prod-voice branch
+# VITE_API_BASE_URL=https://voice.prod.amulai.in, VITE_VOICE_OAN_MODE=true baked at build
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oan-ui-voice
+  namespace: amul-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oan-ui-voice
+  template:
+    metadata:
+      labels:
+        app: oan-ui-voice
+    spec:
+      nodeSelector:
+        role: backend
+      imagePullSecrets:
+        - name: regcred
+      containers:
+        - name: oan-ui-voice
+          image: dev-amulmitra.amul.com/oan-ui-voice:latest
+          ports:
+            - containerPort: 8081
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oan-ui-voice
+  namespace: amul-prod
+spec:
+  selector:
+    app: oan-ui-voice
+  ports:
+    - port: 8081
+      targetPort: 8081

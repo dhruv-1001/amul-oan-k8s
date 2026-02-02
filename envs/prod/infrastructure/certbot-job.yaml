@@ -1,0 +1,49 @@
+# One-time Job to obtain wildcard cert for *.prod.amulai.in via Cloudflare DNS-01.
+# Run once before nginx-gateway-prod, or when certs need to be re-issued.
+# Prerequisite: Create certbot-cloudflare-credentials secret (see README).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: certbot-obtain-prod-amulai
+  namespace: amul
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 3
+  template:
+    spec:
+      nodeSelector:
+        role: infrastructure
+      restartPolicy: OnFailure
+      containers:
+        - name: certbot
+          image: certbot/certbot:v2.9.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              pip install -q certbot-dns-cloudflare
+              certbot certonly \
+                --dns-cloudflare \
+                --dns-cloudflare-credentials /etc/cloudflare/credentials.ini \
+                -d '*.prod.amulai.in' \
+                -d 'prod.amulai.in' \
+                --agree-tos \
+                --email admin@amulai.in \
+                --non-interactive \
+                --config-dir /etc/letsencrypt \
+                --work-dir /var/lib/letsencrypt \
+                --logs-dir /var/log/letsencrypt
+          volumeMounts:
+            - name: letsencrypt
+              mountPath: /etc/letsencrypt
+            - name: cloudflare-credentials
+              mountPath: /etc/cloudflare
+              readOnly: true
+      volumes:
+        - name: letsencrypt
+          hostPath:
+            path: /data/letsencrypt-prod-amulai
+            type: DirectoryOrCreate
+        - name: cloudflare-credentials
+          secret:
+            secretName: certbot-cloudflare-credentials

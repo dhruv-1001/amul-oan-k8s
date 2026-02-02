@@ -1,11 +1,12 @@
-# amul-oan-api (chat/OAN backend)
+# voice-oan-api (Voice OAN backend)
+# Repo: https://github.com/OpenAgriNet/voice-oan-api (amul-prod branch)
 # Depends on: redis (amul namespace). Uses Langfuse for observability.
-# Supervisor runs uvicorn; AMUL_CHAT_BE_UVICORN_WORKERS controls worker count.
+# Supervisor runs uvicorn; AMUL_VOICE_UVICORN_WORKERS controls worker count.
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: amul-oan-api-config
+  name: voice-oan-api-config
   namespace: amul-prod
 data:
   # Environment
@@ -18,43 +19,44 @@ data:
   MARQO_ENDPOINT_URL: "http://10.5.25.44:8882"
   MARQO_INDEX_NAME: "amul-veterinary-index"
   # LLM
-  LLM_PROVIDER: "anthropic"
-  LLM_MODEL_NAME: "claude-sonnet-4-5-20250929"
+  LLM_PROVIDER: "openai"
+  LLM_MODEL_NAME: "gpt-5.1"
   # Langfuse (observability) - keys from secret
   LANGFUSE_BASE_URL: "https://langfuse.prod.amulai.in"
-  LANGFUSE_TRACING_ENVIRONMENT: "chat-production"
+  LANGFUSE_TRACING_ENVIRONMENT: "voice-production"
   # Uvicorn workers - supervisor reads this for the fastapi program
-  AMUL_CHAT_BE_UVICORN_WORKERS: "4"
+  AMUL_VOICE_UVICORN_WORKERS: "4"
+  NUDGE_TIMEOUT_SECONDS: "1.5"
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: amul-oan-api
+  name: voice-oan-api
   namespace: amul-prod
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: amul-oan-api
+      app: voice-oan-api
   template:
     metadata:
       labels:
-        app: amul-oan-api
+        app: voice-oan-api
     spec:
       nodeSelector:
         role: backend
       imagePullSecrets:
         - name: regcred
       containers:
-        - name: amul-oan-api
-          image: dev-amulmitra.amul.com/amul-oan-api:latest
+        - name: voice-oan-api
+          image: dev-amulmitra.amul.com/voice-oan-api:latest
           ports:
-            - containerPort: 8000
+            - containerPort: 8003
           envFrom:
             - configMapRef:
-                name: amul-oan-api-config
+                name: voice-oan-api-config
             - secretRef:
-                name: amul-oan-api-prod-secrets
+                name: voice-oan-api-prod-secrets
           resources:
             requests:
               cpu: 500m
@@ -66,12 +68,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: amul-oan-api
+  name: voice-oan-api
   namespace: amul-prod
 spec:
   selector:
-    app: amul-oan-api
+    app: voice-oan-api
   ports:
     - protocol: TCP
-      port: 8000
-      targetPort: 8000
+      port: 8003
+      targetPort: 8003
