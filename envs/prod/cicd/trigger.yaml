@@ -24,6 +24,6 @@ spec:
         - name: tag_strategy
           value: "tag"
         - name: target_namespace
-          value: "amul"
+          value: "amul-prod"
         - name: target_deployment
           value: "amul-oan-api"
